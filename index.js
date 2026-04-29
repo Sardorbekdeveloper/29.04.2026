@@ -1,54 +1,56 @@
 const http = require("http");
-const { type } = require("os");
+const fs = require("fs");
+const { v4 } = require("uuid");
+
+const options = {
+  "Content-Type": "application/json",
+};
+
+function read_file(file) {
+  if (!fs.existsSync(file)) return [];
+  return JSON.parse(fs.readFileSync(file, "utf-8"));
+}
+
+function write_file(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
 
 const app = http.createServer((req, res) => {
-  if (req.url == "/register" && req.method === "POST") {
+  if (req.url === "/register" && req.method === "POST") {
+    let body = "";
+
     req.on("data", (chunk) => {
-      const data = JSON.parse(chunk);
+      body += chunk;
+    });
+
+    req.on("end", () => {
+      const data = JSON.parse(body);
       const { username, email, password } = data;
+
       const fileData = read_file("auth.json");
 
       if (!username || !email || !password) {
-        res.writeHead(401, options);
-        return res.end(
-          JSON.stringify({
-            message: "username, email, password are required",
-          })
-        );
+        res.writeHead(400, options);
+        return res.end(JSON.stringify({ message: "All fields required" }));
       }
 
       if (!email.endsWith("@gmail.com")) {
-        res.writeHead(401, options);
-        return res.end(
-          JSON.stringify({
-            message: "Google email is required",
-          })
-        );
+        res.writeHead(400, options);
+        return res.end(JSON.stringify({ message: "Google email required" }));
       }
 
-      const foundedUsername = fileData.find(
-        (user) => user.username === username
-      );
-      if (foundedUsername) {
-        res.writeHead(401, options);
-        return res.end(
-          JSON.stringify({
-            message: "Username already exists",
-          })
-        );
+      if (fileData.find((u) => u.username === username)) {
+        res.writeHead(409, options);
+        return res.end(JSON.stringify({ message: "Username exists" }));
       }
 
-      const foundedEmail = fileData.find((user) => user.email === email);
-      if (foundedEmail) {
-        res.writeHead(401, options);
-        return res.end(
-          JSON.stringify({
-            message: "Email already exists",
-          })
-        );
+      if (fileData.find((u) => u.email === email)) {
+        res.writeHead(409, options);
+        return res.end(JSON.stringify({ message: "Email exists" }));
       }
 
-      const hashPassword = btoa(password);
+      const hashPassword = Buffer.from(password).toString("base64");
+
       fileData.push({
         id: v4(),
         username,
@@ -57,15 +59,13 @@ const app = http.createServer((req, res) => {
       });
 
       write_file("auth.json", fileData);
+
       res.writeHead(201, options);
-      res.end(
-        JSON.stringify({
-          message: "Registered",
-        })
-      );
+      res.end(JSON.stringify({ message: "Registered" }));
     });
   }
 });
+
 app.listen(3000, () => {
-  console.log("Server is running at: " + 3000);
+  console.log("Server running on port 3000");
 });
